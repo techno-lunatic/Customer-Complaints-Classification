@@ -1,0 +1,9 @@
+# Downloaded model weights
+model/model.safetensors
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environment
+bert_venv/
