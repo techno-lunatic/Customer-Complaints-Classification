@@ -1,79 +1,213 @@
-# BERT Consumer Complaint Classifier
+# Consumer Complaint Classification using DistilBERT
 
-A beginner-friendly multi-class text classification project. It fine-tunes DistilBERT to predict the `Issue` category of a consumer financial complaint.
+A multi-class text classification application that fine-tunes DistilBERT to predict the issue category of consumer financial complaints. It uses Hugging Face Transformers for model training, FastAPI for inference and a simple HTML, CSS and JavaScript frontend.
 
-## Frontend and backend
+## Features
 
-- **HTML** defines the page structure: heading, text area, button and results area.
-- **CSS** adds basic spacing, colours and layout.
-- **JavaScript** reads the complaint, sends it to the backend using `fetch()`, and displays the returned predictions.
-- **FastAPI** is the small Python backend. It receives the complaint, runs the saved DistilBERT model and returns JSON predictions.
+- Fine-tuning of `distilbert-base-uncased` for complaint classification.
+- Text preprocessing, duplicate removal and conflicting-label filtering.
+- Dynamic category selection based on minimum class frequency.
+- Stratified train-test splitting.
+- Class-weighted cross-entropy loss to address class imbalance.
+- FastAPI backend for model inference.
+- Top-3 predicted complaint categories with confidence scores.
+- Browser-based interface for submitting complaints and viewing predictions.
 
-FastAPI is needed in this setup because a browser cannot directly execute the Python/PyTorch model. It is not the only possible backend, but it is a simple way to connect JavaScript to Python. We do not need a separate React app or a complex API design.
+## Technology Stack
 
-## Project structure
+| Component | Technology |
+|---|---|
+| Language | Python |
+| NLP Model | DistilBERT |
+| Deep Learning | PyTorch |
+| Model Framework | Hugging Face Transformers |
+| Data Processing | Pandas, NumPy |
+| Evaluation | Scikit-learn |
+| Backend | FastAPI |
+| Frontend | HTML, CSS, JavaScript |
+
+## Project Structure
 
 ```text
-BERT_Consumer_Complaint_Classifier/
+Customer-Complaints-Classification/
+│
 ├── dataset/
 │   └── complaints.csv
-├── model/                 # created after training
-├── static/
+│
+├── model/                  # Generated after training
+│
+├── training_checkpoints/   # Training checkpoints
+│
+├── frontend/
 │   ├── index.html
 │   ├── style.css
 │   └── script.js
+│
 ├── train.py
-├── app.py                 # FastAPI backend
+├── app.py
 ├── requirements.txt
 └── README.md
 ```
 
-## Step 1: Train the model
+## Dataset and Preprocessing
 
-A GPU is recommended. You can train in Google Colab or on a computer with a supported GPU.
+The training script expects a CSV file at `dataset/complaints.csv` containing:
 
-Install packages:
+- `Consumer complaint narrative`: Complaint text.
+- `Issue`: Target complaint category.
+
+The preprocessing pipeline performs:
+
+1. Removal of missing values.
+2. Text normalization for identifying duplicate complaints.
+3. Filtering of complaints containing fewer than five normalized words.
+4. Removal of identical normalized text assigned to conflicting categories.
+5. Removal of duplicate normalized complaints.
+6. Filtering of categories with fewer than 100 samples.
+
+The number of classification categories is determined dynamically from the remaining dataset after preprocessing; it is not fixed in the code.
+
+## Model Training
+
+The project uses `distilbert-base-uncased` as the pretrained model and fine-tunes it for sequence classification.
+
+**Training configuration**
+
+| Parameter | Value |
+|---|---|
+| Pretrained Model | distilbert-base-uncased |
+| Maximum Sequence Length | 128 |
+| Batch Size | 8 |
+| Epochs | 2 |
+| Learning Rate | 3e-5 |
+| Train-Test Split | 80:20 |
+| Random Seed | 42 |
+| Minimum Class Samples | 100 |
+
+Additional implementation details:
+
+- LabelEncoder converts complaint categories into numerical labels.
+- Stratified splitting preserves category proportions.
+- Inverse-square-root class weights are used in the cross-entropy loss.
+- Accuracy and macro-F1 are calculated during evaluation.
+- The trained model, tokenizer and category labels are saved in the `model/` directory.
+
+**Evaluation note:** The current implementation uses the 20% test split as the Trainer evaluation dataset for checkpoint selection and also for final evaluation. Consequently, the reported test metrics are not an independent estimate of generalization performance.
+
+## Installation and Setup
+
+**1. Clone the repository**
+
+```bash
+git clone https://github.com/techno-lunatic/Customer-Complaints-Classification.git
+
+cd Customer-Complaints-Classification
+```
+
+**2. Create and activate a virtual environment**
+
+```bash
+python -m venv bert_venv
+
+# Git Bash (Windows)
+source bert_venv/Scripts/activate
+```
+
+**3. Install dependencies**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Run training from the project root:
+**4. Prepare the dataset**
+
+Place `complaints.csv` inside the `dataset/` directory.
+
+**5. Train the model**
 
 ```bash
 python train.py
 ```
 
-The script saves the model and tokenizer in `model/`. The browser application cannot make predictions until this folder has been created.
+The script fine-tunes DistilBERT and saves the trained model, tokenizer and category labels in the `model/` directory. The first run downloads the pretrained model from Hugging Face.
 
-## Step 2: Start the web application
+A GPU is recommended for faster training.
 
-From the project root, run:
+## Running the Application
+
+After training completes, start the FastAPI server from the project root:
 
 ```bash
 uvicorn app:app --reload
 ```
 
-Open this address in your browser:
+Open the application in your browser:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-To stop the server, press `Ctrl + C` in the terminal.
+The backend loads the saved model and tokenizer during application startup.
 
-## How one prediction works
+## API Endpoints
 
-1. The user types a complaint in `index.html`.
-2. Clicking the button calls the JavaScript function `predictComplaint()`.
-3. JavaScript sends the text to `POST /api/predict`.
-4. FastAPI tokenizes the text and runs DistilBERT.
-5. FastAPI returns the top three categories and confidence scores as JSON.
-6. JavaScript displays the results on the page.
+### 1. Health Check
 
-## Notes
+**Endpoint:** `GET /api/health`
 
-- `train.py` uses the supplied dataset and expects the columns `Consumer complaint narrative` and `Issue`.
-- The starter training configuration filters out categories with fewer than 100 examples, uses a stratified 80/20 split, and trains for 2 epochs.
-- The first training run downloads the pretrained DistilBERT model from Hugging Face.
-- The confidence values are model scores, not guarantees.
+Returns the model loading status and the device being used.
+
+Example response:
+
+```json
+{
+    "model_loaded": true,
+    "device": "cpu"
+}
+```
+
+### 2. Predict Complaint Category
+
+**Endpoint:** `POST /api/predict`
+
+Accepts complaint text in JSON format.
+
+**Request:**
+
+```json
+{
+    "text": "I was charged an incorrect amount on my credit card statement and the bank has not resolved my complaint."
+}
+```
+
+**Response:**
+
+```json
+{
+    "predictions": [
+        {
+            "category": "Example Category",
+            "confidence": 85.42
+        },
+        {
+            "category": "Another Category",
+            "confidence": 9.31
+        }
+    ]
+}
+```
+
+The response contains up to three predicted categories, depending on the number of trained classes, with their corresponding model confidence scores.
+
+**Input validation:**
+- Complaints containing fewer than five words return HTTP 400.
+- If the trained model is unavailable, the endpoint returns HTTP 503.
+
+## Inference Workflow
+
+1. The user enters a complaint through the browser interface.
+2. JavaScript sends the complaint to the FastAPI `/api/predict` endpoint.
+3. The backend tokenizes the input using the saved DistilBERT tokenizer.
+4. The trained model generates class probabilities.
+5. The top three predictions and their confidence scores are returned as JSON.
+6. JavaScript displays the predictions in the frontend.
