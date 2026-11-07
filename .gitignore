@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+bert_venv/
+training_checkpoints/
+.env
+*.log
